@@ -34,7 +34,7 @@
 
 cmake_minimum_required(VERSION 3.8.0)
 
-project(rocm-debug-agent VERSION 2.0.3)
+project(rocm-debug-agent VERSION 2.0.4)
 
 include(GNUInstallDirs)
 
