@@ -265,7 +265,8 @@ code_object_t::open ()
 #endif /* !HAVE_MEMFD_CREATE */
   if (fd == -1)
     {
-      agent_warning ("could not create a temporary file for code object");
+      agent_warning ("could not create a temporary file for code object: %s",
+                     strerror (errno));
       return;
     }
 
