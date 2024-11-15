@@ -42,6 +42,7 @@
 #include <stdlib.h>
 #include <string.h>
 #if HAVE_MEMFD_CREATE
+#include <limits.h>
 #include <sys/mman.h>
 #endif /* HAVE_MEMFD_CREATE */
 #include <unistd.h>
@@ -259,7 +260,39 @@ code_object_t::open ()
 
   int fd =
 #if HAVE_MEMFD_CREATE
-    ::memfd_create (m_uri.c_str (), MFD_ALLOW_SEALING | MFD_CLOEXEC);
+      ::memfd_create (
+          [uri = m_uri] () -> std::string {
+            /* The memfd_create(2) NAME parameter needs to be at most 249
+               bytes (excluding the terminating null byte).  This is because
+               an entry named "memfd:NAME" will be created in /proc/PID/fd.
+               This entry's name must to be under NAME_MAX bytes limit (255 on
+               Linux), including the "memfd:" prefix.
+
+               The name parameter given to memfd_create is not important, and
+               do not need to be unique.  However, to help debugging, trim the
+               extra bytes from the left, so the "offset" and "size" parts
+               encoded in the name are kept.  */
+
+            if (auto length = uri.length ();
+                length > NAME_MAX - 6 /* strlen ("memfd:")  */)
+              {
+                /* Since we know that a code object's URI must start with
+                   'memory://' or 'file://', and that 'memory://' code objects
+                   can't exceed the 249 limit, we must have a 'file://' URI.
+                   When left-trimming, keep the 'file://' part.  */
+                agent_assert (uri.substr (0, 7) == "file://");
+                return uri.substr (0, 7) /* Keep the "file://" prefix (8b)  */
+                       + "[...]"
+                       + uri.substr (length
+                                         - (NAME_MAX
+                                            - 6 /* strlen ("memfd:")  */
+                                            - 8 /* strlen ("file://") */
+                                            - 5 /* strlen ("[...]")  */),
+                                     length);
+              }
+            return uri;
+          }().c_str (),
+          MFD_ALLOW_SEALING | MFD_CLOEXEC);
 #else /* !HAVE_MEMFD_CREATE */
     ::open ("/tmp", O_TMPFILE | O_RDWR, 0666);
 #endif /* !HAVE_MEMFD_CREATE */
